@@ -3,6 +3,7 @@ package com.sagakenichi.freelifewgflags.service;
 import com.sagakenichi.freelifewgflags.FreeLifeFlags;
 import com.sagakenichi.freelifewgflags.RegionAccess;
 import com.sagakenichi.freelifewgflags.util.RuleList;
+import org.bukkit.Location;
 import org.bukkit.entity.Player;
 
 import java.util.UUID;
@@ -21,7 +22,11 @@ public final class ChatPolicyCache {
     }
 
     public void refresh(Player player) {
-        regions.configuredRegion(player.getLocation(), flags.chatAllowed)
+        refresh(player, player.getLocation());
+    }
+
+    public void refresh(Player player, Location location) {
+        regions.configuredRegion(location, flags.chatAllowed)
                 .ifPresentOrElse(
                         configured -> policies.put(player.getUniqueId(), RuleList.parse(configured.value())),
                         () -> policies.remove(player.getUniqueId())

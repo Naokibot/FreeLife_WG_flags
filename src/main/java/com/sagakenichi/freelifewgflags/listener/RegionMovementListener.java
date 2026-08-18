@@ -2,13 +2,16 @@ package com.sagakenichi.freelifewgflags.listener;
 
 import com.sagakenichi.freelifewgflags.RegionAccess;
 import com.sagakenichi.freelifewgflags.service.ActivityTracker;
+import com.sagakenichi.freelifewgflags.service.ChatPolicyCache;
 import com.sagakenichi.freelifewgflags.service.ItemBoundaryService;
 import com.sagakenichi.freelifewgflags.service.PlayerStateService;
+import org.bukkit.ChatColor;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
+import org.bukkit.event.entity.PlayerDeathEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -21,17 +24,20 @@ public final class RegionMovementListener implements Listener {
     private final ItemBoundaryService itemBoundary;
     private final ActivityTracker activity;
     private final PlayerStateService stateService;
+    private final ChatPolicyCache chatPolicies;
 
     public RegionMovementListener(
             RegionAccess regions,
             ItemBoundaryService itemBoundary,
             ActivityTracker activity,
-            PlayerStateService stateService
+            PlayerStateService stateService,
+            ChatPolicyCache chatPolicies
     ) {
         this.regions = regions;
         this.itemBoundary = itemBoundary;
         this.activity = activity;
         this.stateService = stateService;
+        this.chatPolicies = chatPolicies;
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -50,9 +56,7 @@ public final class RegionMovementListener implements Listener {
         }
         if (!itemBoundary.canCross(player, event.getFrom(), to, true)) {
             event.setCancelled(true);
-            return;
         }
-        sendEntryMessages(player, event.getFrom(), to);
     }
 
     @EventHandler(priority = EventPriority.HIGHEST, ignoreCancelled = true)
@@ -65,9 +69,32 @@ public final class RegionMovementListener implements Listener {
         activity.touch(player);
         if (!itemBoundary.canCross(player, event.getFrom(), to, true)) {
             event.setCancelled(true);
+        }
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void afterMove(PlayerMoveEvent event) {
+        if (event instanceof PlayerTeleportEvent) {
             return;
         }
+        Location to = event.getTo();
+        if (to == null || sameBlock(event.getFrom(), to)) {
+            return;
+        }
+        Player player = event.getPlayer();
         sendEntryMessages(player, event.getFrom(), to);
+        chatPolicies.refresh(player, to);
+    }
+
+    @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
+    public void afterTeleport(PlayerTeleportEvent event) {
+        Location to = event.getTo();
+        if (to == null) {
+            return;
+        }
+        Player player = event.getPlayer();
+        sendEntryMessages(player, event.getFrom(), to);
+        chatPolicies.refresh(player, to);
     }
 
     @EventHandler
@@ -85,9 +112,20 @@ public final class RegionMovementListener implements Listener {
         activity.touch(event.getPlayer());
     }
 
+    @EventHandler(priority = EventPriority.HIGHEST)
+    public void onDeath(PlayerDeathEvent event) {
+        Player player = event.getEntity();
+        if (!event.getKeepInventory() || !itemBoundary.hasCarriedItems(player)) {
+            return;
+        }
+        if (itemBoundary.isExitRestricted(player.getLocation())) {
+            event.setKeepInventory(false);
+        }
+    }
+
     private void sendEntryMessages(Player player, Location from, Location to) {
         for (String message : regions.entryMessages(from, to)) {
-            player.sendMessage(message);
+            player.sendMessage(ChatColor.translateAlternateColorCodes('&', message));
         }
     }
 

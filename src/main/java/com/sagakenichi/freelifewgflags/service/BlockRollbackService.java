@@ -16,8 +16,12 @@ public final class BlockRollbackService {
         this.plugin = plugin;
     }
 
+    public boolean isEnabled(Integer seconds) {
+        return seconds != null && seconds > 0 && seconds <= MAX_SECONDS;
+    }
+
     public void schedule(BlockState previous, Material expectedType, BlockData expectedData, Integer seconds) {
-        if (seconds == null || seconds <= 0 || seconds > MAX_SECONDS) {
+        if (!isEnabled(seconds)) {
             return;
         }
         long delayTicks = seconds.longValue() * 20L;

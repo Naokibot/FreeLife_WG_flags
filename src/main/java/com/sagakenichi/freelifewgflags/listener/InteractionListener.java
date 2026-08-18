@@ -95,7 +95,8 @@ public final class InteractionListener implements Listener {
                 return;
             }
             if (event.getAction() == Action.RIGHT_CLICK_BLOCK
-                    && regions.isAllowed(player.getLocation(), player, flags.onlyWheatSeeds)
+                    && event.getClickedBlock() != null
+                    && regions.isAllowed(event.getClickedBlock().getLocation(), player, flags.onlyWheatSeeds)
                     && FARMING_PLANT_ITEMS.contains(item.getType().name())
                     && item.getType() != Material.WHEAT_SEEDS) {
                 event.setCancelled(true);

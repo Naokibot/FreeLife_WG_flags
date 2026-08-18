@@ -50,6 +50,22 @@ Target: Spigot 1.21.1 / Java 21 / WorldGuard 7.0.12 / WorldEdit 7.3.8
     - Flag names/types are preflighted before registration.
     - Existing flags are reused only when the type matches exactly; an incompatible conflict fails fast.
 
+11. **Rollback-enabled breaking could duplicate drops when the block reappears.**
+    - Drops and block XP are suppressed only when `fl-block-rollback-seconds` is active for that break.
+
+12. **AFK detection originally ignored inventory-only activity.**
+    - Inventory click/drag, held-slot changes, item drops and hand swaps now refresh activity.
+
+13. **The async chat cache could remain stale for up to one second after crossing a region boundary.**
+    - Successful move/teleport events refresh the destination chat policy at `MONITOR` priority immediately after boundary enforcement.
+
+14. **`keepInventory` death could carry items out of an `fl-item-exit deny` region.**
+    - If a player dies inside an effective item-exit restriction while carrying items and `keepInventory` is true, keep-inventory is disabled for that death so the items remain as drops inside the region.
+
+15. **Border planting and entry-message rendering were hardened.**
+    - The wheat-only rule checks the clicked farmland/block location, not only the player's feet.
+    - `&` color codes are translated when entry messages are sent.
+
 ## Verification boundary
 
 The repository includes parser regression tests and a GitHub Actions build using the real Spigot/WorldGuard/WorldEdit dependencies. A real Minecraft client connected to the user's live Spigot server is not available in this environment, so player-driven E2E behavior must not be claimed unless a server/client run is actually performed.

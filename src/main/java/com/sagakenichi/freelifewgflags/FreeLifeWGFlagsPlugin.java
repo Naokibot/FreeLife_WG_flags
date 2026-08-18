@@ -1,5 +1,6 @@
 package com.sagakenichi.freelifewgflags;
 
+import com.sagakenichi.freelifewgflags.listener.ActivityListener;
 import com.sagakenichi.freelifewgflags.listener.BlockListener;
 import com.sagakenichi.freelifewgflags.listener.ChatCommandListener;
 import com.sagakenichi.freelifewgflags.listener.DamageListener;
@@ -49,7 +50,11 @@ public final class FreeLifeWGFlagsPlugin extends JavaPlugin {
         );
 
         PluginManager pluginManager = getServer().getPluginManager();
-        pluginManager.registerEvents(new RegionMovementListener(regions, itemBoundary, activity, stateService), this);
+        pluginManager.registerEvents(
+                new RegionMovementListener(regions, itemBoundary, activity, stateService, chatPolicies),
+                this
+        );
+        pluginManager.registerEvents(new ActivityListener(activity), this);
         pluginManager.registerEvents(new InteractionListener(flags, regions, messages, activity), this);
         pluginManager.registerEvents(new InventoryListener(flags, regions, messages), this);
         pluginManager.registerEvents(new DamageListener(flags, regions), this);

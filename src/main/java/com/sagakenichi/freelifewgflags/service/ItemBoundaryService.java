@@ -52,6 +52,10 @@ public final class ItemBoundaryService {
         return true;
     }
 
+    public boolean isExitRestricted(Location location) {
+        return !regions.stateRegionKeys(location, flags.itemExit, StateFlag.State.DENY).isEmpty();
+    }
+
     public boolean hasCarriedItems(Player player) {
         PlayerInventory inventory = player.getInventory();
         if (containsItem(inventory.getStorageContents())) {

@@ -94,7 +94,7 @@ public final class EffectService {
                     true,
                     false,
                     true
-            ), true);
+            ));
         }
     }
 
@@ -117,7 +117,7 @@ public final class EffectService {
             player.removePotionEffect(entry.getKey());
             PotionEffect previous = session.previousEffects().get(entry.getKey());
             if (previous != null) {
-                player.addPotionEffect(previous, true);
+                player.addPotionEffect(previous);
             }
         }
     }

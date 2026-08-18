@@ -108,6 +108,10 @@ public final class BlockListener implements Listener {
         Integer seconds = regions.configuredRegion(block.getLocation(), flags.blockRollbackSeconds)
                 .map(RegionAccess.ConfiguredRegion::value)
                 .orElse(null);
+        if (rollback.isEnabled(seconds)) {
+            event.setDropItems(false);
+            event.setExpToDrop(0);
+        }
         BlockState previous = block.getState();
         rollback.schedule(previous, Material.AIR, null, seconds);
     }
