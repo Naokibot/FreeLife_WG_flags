@@ -1,0 +1,35 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+          cache: maven
+      - name: Test and build
+        run: mvn -B -U verify
+      - name: Verify release jar
+        run: |
+          JAR=target/FreeLifeWGFlags-1.0.0-Spigot-1.21.1.jar
+          unzip -t "$JAR"
+          jar tf "$JAR" | grep -q '^plugin.yml$'
+          jar tf "$JAR" | grep -q '^config.yml$'
+          javap -verbose -classpath "$JAR" com.sagakenichi.freelifewgflags.FreeLifeWGFlagsPlugin | grep 'major version: 65'
+          if jar tf "$JAR" | grep -Eq '^com/sk89q/|^org/bukkit/'; then
+            echo 'WorldGuard/WorldEdit/Bukkit classes must not be shaded into this plugin.' >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: FreeLifeWGFlags-1.0.0-Spigot-1.21.1
+          path: target/FreeLifeWGFlags-1.0.0-Spigot-1.21.1.jar
+          if-no-files-found: error

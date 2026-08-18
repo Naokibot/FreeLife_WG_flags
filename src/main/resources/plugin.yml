@@ -1,0 +1,7 @@
+name: FreeLifeWGFlags
+version: '1.0.0'
+main: com.sagakenichi.freelifewgflags.FreeLifeWGFlagsPlugin
+api-version: '1.21'
+author: Naokibot
+description: Focused WorldGuard custom flags for FreeLife regions.
+depend: [WorldGuard]
