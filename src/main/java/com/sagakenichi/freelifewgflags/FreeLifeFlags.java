@@ -24,6 +24,7 @@ public final class FreeLifeFlags {
     public StateFlag removeEffectsOnExit;
     public StringFlag effects;
     public StringFlag timeSwitch;
+    public StringFlag realTimeSwitch;
     public IntegerFlag staySeconds;
     public StringFlag stayTeleport;
     public IntegerFlag afkSeconds;
@@ -53,6 +54,7 @@ public final class FreeLifeFlags {
         removeEffectsOnExit = register(registry, new StateFlag("fl-remove-effects-on-exit", false), StateFlag.class);
         effects = register(registry, new StringFlag("fl-effects"), StringFlag.class);
         timeSwitch = register(registry, new StringFlag("fl-time-switch"), StringFlag.class);
+        realTimeSwitch = register(registry, new StringFlag("fl-real-time-switch"), StringFlag.class);
         staySeconds = register(registry, new IntegerFlag("fl-stay-seconds"), IntegerFlag.class);
         stayTeleport = register(registry, new StringFlag("fl-stay-tp"), StringFlag.class);
         afkSeconds = register(registry, new IntegerFlag("fl-afk-seconds"), IntegerFlag.class);
@@ -80,6 +82,7 @@ public final class FreeLifeFlags {
         requireCompatible(registry, "fl-remove-effects-on-exit", StateFlag.class);
         requireCompatible(registry, "fl-effects", StringFlag.class);
         requireCompatible(registry, "fl-time-switch", StringFlag.class);
+        requireCompatible(registry, "fl-real-time-switch", StringFlag.class);
         requireCompatible(registry, "fl-stay-seconds", IntegerFlag.class);
         requireCompatible(registry, "fl-stay-tp", StringFlag.class);
         requireCompatible(registry, "fl-afk-seconds", IntegerFlag.class);

@@ -7,11 +7,14 @@ import com.sk89q.worldguard.protection.flags.Flag;
 import com.sk89q.worldguard.protection.flags.StateFlag;
 import com.sk89q.worldguard.protection.regions.ProtectedRegion;
 import com.sk89q.worldguard.protection.regions.RegionQuery;
+import com.sagakenichi.freelifewgflags.util.RealTimeSwitchRules;
 import com.sagakenichi.freelifewgflags.util.TimeSwitchRules;
 import org.bukkit.Location;
 import org.bukkit.World;
 import org.bukkit.entity.Player;
 
+import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -29,20 +32,24 @@ public final class RegionAccess {
 
     private final FreeLifeFlags flags;
     private final RegionQuery query;
+    private final ZoneId realTimeZone;
     private final ConcurrentMap<String, TimeSwitchRules> timeRules = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, RealTimeSwitchRules> realTimeRules = new ConcurrentHashMap<>();
 
-    public RegionAccess(FreeLifeFlags flags) {
+    public RegionAccess(FreeLifeFlags flags, ZoneId realTimeZone) {
         this.flags = flags;
+        this.realTimeZone = realTimeZone;
         this.query = WorldGuard.getInstance().getPlatform().getRegionContainer().createQuery();
     }
 
     public StateFlag.State state(Location location, Player player, StateFlag flag) {
         int activePriority = Integer.MIN_VALUE;
         StateFlag.State combined = null;
-        long time = location.getWorld().getTime();
+        long worldTime = location.getWorld().getTime();
+        LocalTime currentRealTime = LocalTime.now(realTimeZone);
 
         for (ProtectedRegion region : sortedRegions(location)) {
-            StateFlag.State candidate = stateOnRegion(region, time, flag);
+            StateFlag.State candidate = stateOnRegion(region, worldTime, currentRealTime, flag);
             if (candidate == null) {
                 continue;
             }
@@ -88,10 +95,11 @@ public final class RegionAccess {
         int activePriority = Integer.MIN_VALUE;
         StateFlag.State combined = null;
         Set<String> matching = new HashSet<>();
-        long time = location.getWorld().getTime();
+        long worldTime = location.getWorld().getTime();
+        LocalTime currentRealTime = LocalTime.now(realTimeZone);
 
         for (ProtectedRegion region : sortedRegions(location)) {
-            StateFlag.State candidate = stateOnRegion(region, time, flag);
+            StateFlag.State candidate = stateOnRegion(region, worldTime, currentRealTime, flag);
             if (candidate == null) {
                 continue;
             }
@@ -109,14 +117,32 @@ public final class RegionAccess {
     }
 
     public StateFlag.State stateOnRegion(ProtectedRegion region, long worldTime, StateFlag flag) {
-        StateFlag.State base = region.getFlag(flag);
-        String rawRules = region.getFlag(flags.timeSwitch);
-        if (rawRules == null) {
-            return base;
+        return stateOnRegion(region, worldTime, LocalTime.now(realTimeZone), flag);
+    }
+
+    private StateFlag.State stateOnRegion(
+            ProtectedRegion region,
+            long worldTime,
+            LocalTime currentRealTime,
+            StateFlag flag
+    ) {
+        StateFlag.State state = region.getFlag(flag);
+
+        String minecraftRules = region.getFlag(flags.timeSwitch);
+        if (minecraftRules != null) {
+            state = timeRules.computeIfAbsent(minecraftRules, TimeSwitchRules::parse)
+                    .override(flag.getName(), worldTime)
+                    .orElse(state);
         }
-        return timeRules.computeIfAbsent(rawRules, TimeSwitchRules::parse)
-                .override(flag.getName(), worldTime)
-                .orElse(base);
+
+        String realRules = region.getFlag(flags.realTimeSwitch);
+        if (realRules != null) {
+            state = realTimeRules.computeIfAbsent(realRules, RealTimeSwitchRules::parse)
+                    .override(flag.getName(), currentRealTime)
+                    .orElse(state);
+        }
+
+        return state;
     }
 
     public List<String> entryMessages(Location from, Location to) {

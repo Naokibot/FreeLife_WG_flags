@@ -1,3 +1,7 @@
+schedule:
+  # Time zone used by fl-real-time-switch. Existing installations without this key use Asia/Tokyo.
+  real-time-zone: 'Asia/Tokyo'
+
 messages:
   prefix: '&6[FreeLife] &e'
   villager-trade-denied: 'このリージョンでは村人と取引できません。'

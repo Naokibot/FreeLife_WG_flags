@@ -17,7 +17,12 @@ import org.bukkit.entity.Player;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import java.time.DateTimeException;
+import java.time.ZoneId;
+
 public final class FreeLifeWGFlagsPlugin extends JavaPlugin {
+
+    private static final ZoneId DEFAULT_REAL_TIME_ZONE = ZoneId.of("Asia/Tokyo");
 
     private final FreeLifeFlags flags = new FreeLifeFlags();
     private PlayerStateService stateService;
@@ -32,7 +37,7 @@ public final class FreeLifeWGFlagsPlugin extends JavaPlugin {
         saveDefaultConfig();
 
         MessageService messages = new MessageService(this);
-        RegionAccess regions = new RegionAccess(flags);
+        RegionAccess regions = new RegionAccess(flags, realTimeZone());
         ActivityTracker activity = new ActivityTracker();
         ItemBoundaryService itemBoundary = new ItemBoundaryService(flags, regions, messages);
         ChatPolicyCache chatPolicies = new ChatPolicyCache(flags, regions);
@@ -68,13 +73,29 @@ public final class FreeLifeWGFlagsPlugin extends JavaPlugin {
             stateService.joined(player);
         }
         getServer().getScheduler().runTaskTimer(this, stateService::tick, 20L, 20L);
-        getLogger().info("FreeLifeWGFlags 1.0.0 enabled with 24 custom WorldGuard flags.");
+        getLogger().info("FreeLifeWGFlags 1.1.0 enabled with 25 custom WorldGuard flags.");
     }
 
     @Override
     public void onDisable() {
         if (stateService != null) {
             stateService.shutdown();
+        }
+    }
+
+    private ZoneId realTimeZone() {
+        String configured = getConfig().getString("schedule.real-time-zone", DEFAULT_REAL_TIME_ZONE.getId());
+        if (configured == null || configured.isBlank()) {
+            return DEFAULT_REAL_TIME_ZONE;
+        }
+        try {
+            return ZoneId.of(configured.trim());
+        } catch (DateTimeException exception) {
+            getLogger().warning(
+                    "Invalid schedule.real-time-zone '" + configured + "'; using "
+                            + DEFAULT_REAL_TIME_ZONE.getId() + "."
+            );
+            return DEFAULT_REAL_TIME_ZONE;
         }
     }
 }

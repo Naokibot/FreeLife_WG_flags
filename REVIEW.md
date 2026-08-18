@@ -1,71 +1,76 @@
-# FreeLifeWGFlags 1.0.0 review
+# FreeLifeWGFlags 1.1.0 review
 
 Target: Spigot 1.21.1 / Java 21 / WorldGuard 7.0.12 / WorldEdit 7.3.8
 
-## Design
+## Scope
 
-- WorldGuard and WorldEdit are runtime dependencies and are not shaded into the plugin.
-- Custom flags are registered from `onLoad()`, before WorldGuard closes its flag registry during enable.
-- All custom names use the `fl-` prefix to avoid collisions with standard WorldGuard flags.
-- Repository structure is deliberately small: one flag registry, one WorldGuard query layer, focused listeners, focused state services, and small parsers.
-- There is no catch-all god class and no framework-like abstraction layer.
+Version 1.1.0 keeps the existing 24 flags and their behavior, adds `fl-real-time-switch`, and rewrites README.md in English. The new real-time scheduler is limited to FreeLife State flags, matching the semantics of the existing Minecraft-time switch.
 
-## Issues found during review and fixed
+## Real-time scheduler review
 
-1. **Effect removal originally risked deleting effects that existed before region entry.**
-   - Previous effects are now snapshotted per effect type.
-   - Exit cleanup only removes a short-lived effect matching the amplifier applied by this plugin, then restores the recorded prior effect.
-   - If another plugin replaces the effect while the player is inside, the newer effect is not overwritten during cleanup.
+1. **`HH:mm` contains the same colon character used before the assignment list.**
+   - A naive `split(":")` parser would break `09:30-17:45:flag=allow`.
+   - The implementation uses an anchored regular expression that parses both time endpoints before the assignment section.
 
-2. **A first rollback implementation compared a broken block with its pre-break material.**
-   - A break event now records `AIR` as the expected post-operation state.
-   - A placed block records its actual post-place BlockData.
-   - Restoration is skipped if the current state no longer matches the expected state, preventing delayed rollback from overwriting later edits.
+2. **Boundary semantics were ambiguous.**
+   - Windows are start-inclusive and end-exclusive.
+   - `09:00-17:00` is active from 09:00 through 16:59 and stops exactly at 17:00.
 
-3. **Multi-block placement could have restored only one block.**
-   - `BlockMultiPlaceEvent#getReplacedBlockStates()` is handled and every replaced block is snapshotted.
+3. **Overnight schedules need different range logic.**
+   - `22:00-06:00` matches both late evening and early morning.
+   - Unit tests cover both sides of midnight and the exact end boundary.
 
-4. **Plugin-driven timeout/AFK teleports could bypass item boundary rules.**
-   - Every plugin teleport is checked against both `fl-item-exit` at the source and `fl-item-entry` at the destination.
+4. **Administrators commonly write whole-hour schedules.**
+   - Both `9-17` and `09:00-17:00` are accepted.
+   - `24`/`24:00` is accepted only as the end of a window, allowing `17-24` without introducing an invalid `LocalTime` value.
 
-5. **Moving directly from one restricted region to another could bypass simple boolean boundary checks.**
-   - Boundary enforcement compares the effective highest-priority region keys, not only a yes/no state.
+5. **Zero-length and malformed windows could accidentally become always-on.**
+   - Equal start/end ranges, invalid hours/minutes, malformed assignments, and malformed windows are ignored rather than treated as full-day rules.
 
-6. **Lower-priority time rules could have overridden higher-priority state flags.**
-   - Dynamic time state is now resolved at the highest active region priority and uses WorldGuard StateFlag conflict semantics (`DENY` wins within the same priority).
+6. **Time zone handling must not depend on the host machine's local zone.**
+   - `schedule.real-time-zone` defaults to `Asia/Tokyo`.
+   - An invalid configured ZoneId logs a warning and falls back to `Asia/Tokyo` instead of disabling the plugin.
+   - Existing installations that do not yet have the new config key still use the default value.
 
-7. **Async chat must not call Bukkit/WorldGuard region APIs.**
-   - The main thread refreshes the chat policy once per second.
-   - `AsyncPlayerChatEvent` reads only a concurrent immutable rule object and schedules denial messages back to the main thread.
+7. **Minecraft-time and real-time rules need deterministic precedence.**
+   - Resolution order is base State flag, then `fl-time-switch`, then `fl-real-time-switch`.
+   - A real-time rule only overrides while a matching window exists; otherwise the previous resolved value is retained.
 
-8. **Item escrow would introduce crash-loss and duplication risk.**
-   - No inventory is automatically removed or stored.
-   - Entry/exit is denied while inventory, armor or offhand contains an item.
+8. **A clock-minute change during one region query could produce inconsistent same-priority results.**
+   - Each state resolution captures one `LocalTime` snapshot and uses it for all applicable regions in that resolution.
 
-9. **The storage requirement includes public utility use, not just chest denial.**
-   - `fl-storage-protection allow` explicitly permits block use for doors, buttons, levers and beds.
-   - Storage is denied at both interaction and inventory-open layers.
+9. **Flag registration conflicts must still fail safely.**
+   - `fl-real-time-switch` is included in the existing preflight type check before any flag registration proceeds.
 
-10. **Flag conflict could partially register the flag set.**
-    - Flag names/types are preflighted before registration.
-    - Existing flags are reused only when the type matches exactly; an incompatible conflict fails fast.
+## Existing hardening retained
 
-11. **Rollback-enabled breaking could duplicate drops when the block reappears.**
-    - Drops and block XP are suppressed only when `fl-block-rollback-seconds` is active for that break.
+- Effect exit cleanup preserves pre-existing effects when safe.
+- Rollback checks the expected post-operation state before restoring a block.
+- Multi-block placement records each replaced block state.
+- Rollback-enabled block breaking suppresses drops and block XP to prevent duplication.
+- Stay/AFK teleports honor item entry and exit restrictions.
+- Direct movement between restricted regions compares effective region keys.
+- Async chat never queries WorldGuard from the async event thread.
+- Chat policy is refreshed immediately after successful region crossing and periodically as a fallback.
+- AFK activity includes inventory interaction, held-slot changes, drops, and hand swaps.
+- Item restrictions do not use escrow storage.
+- `keepInventory` cannot be used to carry items out of an effective item-exit restriction through death.
+- Storage protection is checked at both interaction and inventory-open layers.
+- Custom flag names/types are preflighted before registration.
 
-12. **AFK detection originally ignored inventory-only activity.**
-    - Inventory click/drag, held-slot changes, item drops and hand swaps now refresh activity.
+## Test coverage
 
-13. **The async chat cache could remain stale for up to one second after crossing a region boundary.**
-    - Successful move/teleport events refresh the destination chat policy at `MONITOR` priority immediately after boundary enforcement.
+Existing parser tests remain in place. Version 1.1.0 adds real-time rule tests for:
 
-14. **`keepInventory` death could carry items out of an `fl-item-exit deny` region.**
-    - If a player dies inside an effective item-exit restriction while carrying items and `keepInventory` is true, keep-inventory is disabled for that death so the items remain as drops inside the region.
-
-15. **Border planting and entry-message rendering were hardened.**
-    - The wheat-only rule checks the clicked farmland/block location, not only the player's feet.
-    - `&` color codes are translated when entry messages are sent.
+- exact start and end boundaries
+- minute-precision schedules
+- overnight schedules
+- whole-hour shorthand
+- `24:00` end-of-day handling
+- malformed and zero-length windows
 
 ## Verification boundary
 
-The repository includes parser regression tests and a GitHub Actions build using the real Spigot/WorldGuard/WorldEdit dependencies. A real Minecraft client connected to the user's live Spigot server is not available in this environment, so player-driven E2E behavior must not be claimed unless a server/client run is actually performed.
+GitHub Actions builds the final source against the real Spigot/WorldGuard/WorldEdit dependencies, runs the JUnit suite, verifies the release JAR and Java class version, and checks that dependency classes are not shaded into the plugin.
+
+A real Minecraft client connected to the user's live server is not available in CI, so live player-driven end-to-end testing is not claimed.
