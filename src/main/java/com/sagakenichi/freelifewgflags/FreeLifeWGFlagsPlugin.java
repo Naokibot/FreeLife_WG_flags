@@ -13,6 +13,7 @@ import com.sagakenichi.freelifewgflags.service.ChatPolicyCache;
 import com.sagakenichi.freelifewgflags.service.EffectService;
 import com.sagakenichi.freelifewgflags.service.ItemBoundaryService;
 import com.sagakenichi.freelifewgflags.service.PlayerStateService;
+import com.sagakenichi.freelifewgflags.service.WaterEffectService;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
@@ -42,6 +43,7 @@ public final class FreeLifeWGFlagsPlugin extends JavaPlugin {
         ItemBoundaryService itemBoundary = new ItemBoundaryService(flags, regions, messages);
         ChatPolicyCache chatPolicies = new ChatPolicyCache(flags, regions);
         EffectService effects = new EffectService(flags, regions);
+        WaterEffectService waterEffects = new WaterEffectService(this, flags, regions);
         BlockRollbackService rollback = new BlockRollbackService(this);
         stateService = new PlayerStateService(
                 this,
@@ -73,7 +75,8 @@ public final class FreeLifeWGFlagsPlugin extends JavaPlugin {
             stateService.joined(player);
         }
         getServer().getScheduler().runTaskTimer(this, stateService::tick, 20L, 20L);
-        getLogger().info("FreeLifeWGFlags 1.1.0 enabled with 25 custom WorldGuard flags.");
+        getServer().getScheduler().runTaskTimer(this, waterEffects::tick, 1L, 5L);
+        getLogger().info("FreeLifeWGFlags 1.2.0 enabled with 26 custom WorldGuard flags.");
     }
 
     @Override
