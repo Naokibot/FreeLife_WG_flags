@@ -35,8 +35,8 @@ Custom flags are registered during `onLoad()`. After replacing the JAR, fully st
 | `fl-afk-tp` | String | `hub;0.5;64;0.5;0;0` | AFK teleport destination |
 | `fl-item-entry` | State | `deny` | Blocks entering while carrying items |
 | `fl-item-exit` | State | `deny` | Blocks leaving while carrying items |
-| `fl-place-blocks` | String | `stone,cobblestone` | Limits blocks that may be placed |
-| `fl-break-blocks` | String | `stone,cobblestone` | Limits blocks that may be broken |
+| `fl-place-blocks` | String | `stone,cobblestone` | Explicitly allows only listed blocks for direct player placement and can override BUILD deny |
+| `fl-break-blocks` | String | `stone,cobblestone` | Explicitly allows only listed blocks for direct player breaking and can override BUILD deny |
 | `fl-block-rollback-seconds` | Integer | `30` | Restores block changes after the configured delay |
 | `fl-chat-allowed` | String | `hello,trade *` | Allows only matching chat messages |
 | `fl-command-allowed` | String | `spawn,hub,warp shop*` | Allows only matching commands |
@@ -73,42 +73,13 @@ When exit cleanup is enabled, the plugin removes only effects that it applied th
 
 `fl-water-effects` applies potion effects while a player is touching water or swimming in water inside the region.
 
-Format:
-
-```text
-effect:level:seconds,effect:level:seconds
-```
-
-Example:
-
 ```text
 /rg flag pool fl-water-effects speed:2:10,water_breathing:1:30
 ```
 
-This applies:
-
-- Speed II for 10 seconds
-- Water Breathing I for 30 seconds
-
-The water check runs every 5 ticks. While the player stays in water, the configured effects are refreshed, so they do not expire during continuous swimming. After leaving the water, each effect remains for the configured duration counted from the last refresh.
-
-Water detection includes the server's in-water state, water at the player's feet or eyes, bubble columns, and waterlogged blocks at those positions.
-
-Levels are one-based and may be from 1 to 256. Durations are in seconds and may be from 1 to 86400. Invalid entries are ignored without disabling the plugin.
-
-`fl-water-effects` does not use `fl-remove-effects-on-exit`; its duration is intentionally controlled by the seconds written in the water-effect specification.
+Each entry is `effect:level:seconds`. The water check runs every 5 ticks. While water contact continues, effects are refreshed. After leaving water, each effect remains for the configured duration counted from the final refresh. Water detection includes Bukkit's in-water state, water at the feet or eyes, bubble columns, and waterlogged blocks at those positions.
 
 ## Minecraft-time switching
-
-`fl-time-switch` changes FreeLife State flags according to Minecraft world time.
-
-Format:
-
-```text
-startTick-endTick:flag=allow,flag=deny|startTick-endTick:flag=allow
-```
-
-Example:
 
 ```text
 /rg flag arena fl-time-switch 0-11999:fl-wind-charge=allow|12000-23999:fl-wind-charge=deny
@@ -118,72 +89,24 @@ Ranges that cross Minecraft midnight, such as `18000-1000`, are supported.
 
 ## Real-clock-time switching
 
-`fl-real-time-switch` changes FreeLife State flags according to the real clock. The default time zone is `Asia/Tokyo`.
-
-Configure the time zone in `plugins/FreeLifeWGFlags/config.yml`:
-
-```yaml
-schedule:
-  real-time-zone: 'Asia/Tokyo'
-```
-
-Any Java `ZoneId` such as `UTC`, `Asia/Tokyo`, or `America/New_York` may be used. If the configured zone is invalid, the plugin logs a warning and falls back to `Asia/Tokyo`.
-
-Format:
-
-```text
-start-end:flag=allow,flag=deny|start-end:flag=allow
-```
-
-Times may use either `H`/`HH` or `HH:mm` notation.
-
-```text
-/rg flag arena fl-real-time-switch 9-17:fl-wind-charge=allow|17-24:fl-wind-charge=deny
-```
-
-The same rule with minute precision:
+The default time zone is `Asia/Tokyo`. It can be changed in `plugins/FreeLifeWGFlags/config.yml` with `schedule.real-time-zone`.
 
 ```text
 /rg flag arena fl-real-time-switch 09:30-17:45:fl-wind-charge=allow|17:45-24:fl-wind-charge=deny
 ```
 
-Multiple State flags may be changed in one window:
+Overnight windows such as `22:00-06:00` are supported. Windows are start-inclusive and end-exclusive. Real-clock overrides have precedence over Minecraft-time overrides while a matching real-time window is active.
 
-```text
-/rg flag arena fl-real-time-switch 09:00-18:00:fl-wind-charge=allow,fl-invincible=deny|18:00-24:fl-wind-charge=deny,fl-invincible=allow
-```
-
-Overnight windows are supported:
-
-```text
-/rg flag nightzone fl-real-time-switch 22:00-06:00:fl-invincible=allow
-```
-
-Time-window rules are **start-inclusive and end-exclusive**. `09:00-17:00` is active at 09:00 through 16:59 and stops at 17:00. `24` or `24:00` is accepted only as an end time. A zero-length range such as `09:00-09:00` is ignored.
-
-If the same State flag is controlled by its normal region value, `fl-time-switch`, and `fl-real-time-switch`, the order is:
-
-1. normal region State flag
-2. Minecraft-time override from `fl-time-switch`
-3. real-clock override from `fl-real-time-switch`
-
-A real-clock rule only overrides the value while one of its matching windows is active. Outside all matching real-time windows, the result falls back to the Minecraft-time override or the normal region value.
-
-## Stay-time teleport and AFK teleport
-
-Teleport destinations use either `world;x;y;z` or `world;x;y;z;yaw;pitch`.
+## Stay-time and AFK teleport
 
 ```text
 /rg flag queue fl-stay-seconds 600
 /rg flag queue fl-stay-tp world;0.5;70;0.5;90;0
-
 /rg flag lobby fl-afk-seconds 300
 /rg flag lobby fl-afk-tp afk;0.5;64;0.5
 ```
 
-If an automatic teleport conflicts with `fl-item-entry` or `fl-item-exit`, the item boundary restriction wins and the teleport is not performed.
-
-AFK activity includes movement, inventory click/drag, held-slot changes, item drops, and main/off-hand swaps.
+Destinations are `world;x;y;z` or `world;x;y;z;yaw;pitch`. Automatic teleports honor item entry/exit restrictions.
 
 ## Item entry and exit restrictions
 
@@ -192,18 +115,27 @@ AFK activity includes movement, inventory click/drag, held-slot changes, item dr
 /rg flag minigame fl-item-exit deny
 ```
 
-The check includes storage inventory, armor, and off-hand items. Items are not silently removed, escrowed, or copied.
+Storage inventory, armor, and off-hand items are checked. Items are not silently removed or escrowed.
 
-If a player dies inside an effective `fl-item-exit deny` region with `keepInventory` enabled while carrying items, keep-inventory is disabled for that death so the items remain as drops inside the restricted region rather than being carried out through respawn.
-
-## Allowed block lists
+## Explicit block allow lists and BUILD precedence
 
 ```text
 /rg flag build fl-place-blocks stone,cobblestone,oak_planks
 /rg flag build fl-break-blocks stone,cobblestone,oak_planks
 ```
 
-`*` allows every block and `none` allows no block. These flags do not bypass WorldGuard's own BUILD denial; they further restrict operations that WorldGuard already permits.
+`*` allows every block and `none` allows no block.
+
+For a direct player `BlockPlaceEvent` or `BlockBreakEvent`, a material explicitly allowed by `fl-place-blocks` or `fl-break-blocks` is evaluated above WorldGuard's special `build` flag. This means an allow-listed material can be placed or broken even when `build` itself is denied.
+
+This override is deliberately narrow:
+
+- an explicit WorldGuard `block-place deny` still blocks placement;
+- an explicit WorldGuard `block-break deny` still blocks breaking;
+- the override applies only to direct player block place/break events, not pistons, explosions, fire spread, liquid flow, or other indirect world changes;
+- it does not un-cancel an event denied by another Bukkit plugin.
+
+The implementation uses WorldGuard's delegate block event result so WorldGuard's own build check sees an explicit ALLOW. It does not modify WorldGuard itself.
 
 ## Block rollback
 
@@ -211,9 +143,7 @@ If a player dies inside an effective `fl-item-exit deny` region with `keepInvent
 /rg flag arena fl-block-rollback-seconds 20
 ```
 
-The previous `BlockState` is restored after the delay only if the current block still matches the expected post-operation state. This prevents a delayed rollback from overwriting a later edit.
-
-When rollback is active for a block break, block drops and block XP are suppressed because the block is later restored. This prevents duplication through break-and-restore loops.
+The previous `BlockState` is restored after the delay only if the current block still matches the expected post-operation state. Rollback-enabled breaking suppresses drops and block XP to prevent break-and-restore duplication.
 
 ## Allowed chat and commands
 
@@ -222,14 +152,7 @@ When rollback is active for a block break, block drops and block XP are suppress
 /rg flag lobby fl-command-allowed spawn,hub,msg *
 ```
 
-Rule behavior:
-
-- `*` allows everything.
-- `none` allows nothing.
-- A trailing `*` performs prefix matching.
-- A command rule without arguments, such as `spawn`, matches the command label.
-
-Chat is processed asynchronously by Spigot. The async handler never calls WorldGuard region APIs directly; it reads an immutable policy cached from the main thread. The cache is refreshed immediately after successful region movement/teleport and once per second as a fallback.
+`*` allows everything, `none` allows nothing, and a trailing `*` performs prefix matching.
 
 ## Public utility use with protected storage
 
@@ -237,29 +160,26 @@ Chat is processed asynchronously by Spigot. The async handler never calls WorldG
 /rg flag spawn fl-storage-protection allow
 ```
 
-This mode explicitly permits block use for doors, buttons, levers, and beds while denying access to:
+Doors, buttons, levers, and beds remain usable. Chests, trapped chests, barrels, hoppers, and all shulker boxes are blocked at both the interaction and inventory-open layers.
 
-- chests and trapped chests
-- barrels
-- hoppers
-- all shulker boxes
+## Separate marine mobs plugin
 
-Storage is checked at both the block-interaction and inventory-open layers.
+`marine-mobs/` contains `FreeLifeMarineMobs`, a separate Spigot-only plugin for command-spawned rideable shark and orca entities. It is not loaded as part of FreeLifeWGFlags. See `marine-mobs/README.md` for commands, rendering limitations, and model references.
 
 ## Build
 
 ```bash
 mvn -B verify
+mvn -B -f marine-mobs/pom.xml verify
 ```
 
-Output:
+Outputs:
 
 ```text
-target/FreeLifeWGFlags-1.2.0-Spigot-1.21.1.jar
+target/FreeLifeWGFlags-1.3.0-Spigot-1.21.1.jar
+marine-mobs/target/FreeLifeMarineMobs-1.0.0-Spigot-1.21.1.jar
 ```
 
 ## Verification scope
 
-CI compiles against the real Spigot 1.21.1, WorldGuard 7.0.12, and WorldEdit 7.3.8 dependencies, runs unit tests, checks the release JAR, verifies Java 21 class version 65, and ensures Bukkit/WorldGuard/WorldEdit classes are not shaded into the plugin.
-
-A real Minecraft client connected to a live production server is not part of CI, so client-driven end-to-end behavior should still be verified on a staging server before production rollout.
+CI compiles both plugins against their real Spigot/WorldGuard/WorldEdit dependencies, runs unit tests, checks both release JARs, verifies Java 21 class version 65, and checks that API dependency classes are not shaded into the plugins. Live Minecraft-client E2E is still required before production rollout.

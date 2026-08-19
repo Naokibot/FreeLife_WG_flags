@@ -1,94 +1,45 @@
-# FreeLifeWGFlags 1.2.0 review
+# FreeLifeWGFlags 1.3.0 review
 
 Target: Spigot 1.21.1 / Java 21 / WorldGuard 7.0.12 / WorldEdit 7.3.8
 
 ## Scope
 
-Version 1.2.0 keeps the existing 25 flags and their behavior and adds one String flag: `fl-water-effects`.
+Version 1.3.0 keeps all 26 custom flags. The behavior change is limited to `fl-place-blocks` and `fl-break-blocks`: an explicitly allow-listed material now takes precedence over WorldGuard's special `build` denial for direct player placement/breaking.
 
-The new flag applies configurable potion effects when a player touches water or remains swimming in water inside a configured WorldGuard region.
+## Build override review
 
-## Water-effect review
+1. **Blindly un-cancelling Bukkit BlockPlaceEvent/BlockBreakEvent would bypass unrelated protection plugins.**
+   - The implementation does not un-cancel the Bukkit event.
+   - It sets WorldGuard's delegate block-event result to ALLOW before WorldGuard's build protection listener evaluates the event.
 
-1. **A movement-only trigger would miss players who remain swimming without changing blocks.**
-   - Water contact is checked on a repeating main-thread task every 5 ticks.
-   - Effects are refreshed during continuous swimming rather than only on the first movement event.
+2. **The override must be higher than BUILD, not higher than every WorldGuard protection flag.**
+   - An explicit WorldGuard `block-place deny` remains authoritative for placement.
+   - An explicit WorldGuard `block-break deny` remains authoritative for breaking.
+   - This matches WorldGuard's own build-related precedence model where protection-specific flags can override BUILD.
 
-2. **A one-second polling interval can let a one-second effect expire between refreshes.**
-   - The water task runs every 5 ticks instead of sharing the existing one-second player-state task.
-   - First contact is therefore detected within roughly a quarter second under normal server tick timing.
+3. **Indirect block changes should not inherit a player allow-list accidentally.**
+   - Override eligibility is limited to delegate events whose original event is Bukkit `BlockPlaceEvent` or `BlockBreakEvent`.
+   - Pistons, explosions, fire spread, falling blocks, liquids, and other indirect changes are not pre-allowed.
 
-3. **Water contact is broader than a literal `WATER` block at the player's feet.**
-   - The implementation first uses Bukkit's entity `isInWater()` state.
-   - It also checks the blocks at the player's feet and eyes.
-   - `WATER`, `BUBBLE_COLUMN`, and waterlogged block data are treated as water contact.
+4. **Multi-block direct placement needs all affected locations/materials to qualify.**
+   - Every WorldGuard delegate block in the operation must have an applicable `fl-place-blocks` configuration that permits the effective material.
+   - If any block fails, the delegate is left at DEFAULT and WorldGuard performs its normal protection check.
 
-4. **Continuous refresh and configured duration need explicit semantics.**
-   - Each specification uses `effect:level:seconds`.
-   - While water contact continues, the configured duration is refreshed every 5 ticks.
-   - After leaving water, the effect naturally expires after the configured duration counted from the final refresh.
-
-5. **Water effects must not conflict with region-wide effect cleanup.**
-   - `fl-water-effects` is independent of `fl-effects` and `fl-remove-effects-on-exit`.
-   - Water effects are not forcibly removed when the player leaves the region or water; their configured durations control expiry.
-
-6. **Unbounded values could create invalid or impractical potion effects.**
-   - Levels are limited to 1 through 256.
-   - Durations are limited to 1 through 86400 seconds.
-   - Values are converted to ticks only after validation.
-
-7. **Malformed effect entries must not disable the plugin.**
-   - Invalid levels, durations, malformed entries, and empty names are ignored by the syntax parser.
-   - Unknown effect names are skipped when the live Bukkit server resolves the parsed specification.
-   - Other valid entries in the same flag value continue to work.
-
-8. **Repeated parsing and registry lookup every 5 ticks is unnecessary.**
-   - Resolved effect specifications are cached by their raw WorldGuard flag value.
-   - Editing the flag to a new value naturally creates a new cached entry without requiring a restart.
-
-9. **Water checks should not query WorldGuard for every dry player.**
-   - Water contact is checked before querying the region flag.
-   - Dry players therefore skip the WorldGuard lookup in the high-frequency task.
-
-10. **Existing effects should not be forcibly stripped just to apply a water effect.**
-    - The implementation uses Bukkit's normal `addPotionEffect(PotionEffect)` method rather than the deprecated force overload.
-
-11. **The first CI run exposed a test-environment registry dependency.**
-    - Spigot 1.21.1 initializes `PotionEffectType` through the Bukkit registry, which is unavailable in a plain unit-test JVM.
-    - The parser was refactored to remain Bukkit-independent and store normalized effect names.
-    - Effect names are resolved once on the live server and then cached.
-    - This fixes unit-test isolation without weakening runtime validation.
+5. **WorldGuard's delegate events are documented as internal API.**
+   - This plugin deliberately targets WorldGuard 7.0.12 and CI compiles against that exact version.
+   - The internal hook is isolated in `BuildOverrideListener` so a future WorldGuard upgrade has one compatibility surface to review.
 
 ## Existing hardening retained
 
-- Real-clock schedules use deterministic time-zone and boundary handling.
-- Minecraft-time and real-time State overrides retain their existing precedence.
+- All 26 custom flags retain their registration names and value formats.
+- Real-clock schedules keep deterministic time-zone and boundary handling.
+- Water-triggered effects continue to use Bukkit-independent parsing plus live registry resolution.
 - Effect exit cleanup preserves pre-existing region effects when safe.
-- Rollback checks the expected post-operation state before restoring a block.
-- Rollback-enabled block breaking suppresses drops and block XP to prevent duplication.
-- Stay/AFK teleports honor item entry and exit restrictions.
+- Rollback restores only when the expected post-operation block still matches and suppresses break drops/XP while rollback is active.
+- Stay/AFK teleports honor item entry/exit restrictions.
 - Async chat never queries WorldGuard from the async event thread.
-- AFK activity includes inventory interaction, held-slot changes, drops, and hand swaps.
-- `keepInventory` cannot be used to carry items out of an effective item-exit restriction through death.
 - Storage protection is checked at both interaction and inventory-open layers.
-- Custom flag names/types are preflighted before registration.
-
-## Tests
-
-Version 1.2.0 adds parser regression tests covering:
-
-- multiple effects in one flag
-- normalization of effect names
-- one-based levels converted to potion amplifiers
-- seconds converted to ticks
-- zero values
-- levels above the configured maximum
-- durations above the configured maximum
-- malformed entries
-- preservation of valid entries when invalid entries are present
 
 ## Verification boundary
 
-GitHub Actions builds against the real Spigot 1.21.1, WorldGuard 7.0.12, and WorldEdit 7.3.8 dependencies, runs the JUnit suite, verifies the release JAR and Java class version, and checks that dependency classes are not shaded into the plugin.
-
-A real Minecraft client connected to the user's live server is not available in CI, so live player-driven water-contact and swimming E2E testing is not claimed.
+GitHub Actions builds against the real Spigot 1.21.1, WorldGuard 7.0.12, and WorldEdit 7.3.8 APIs, runs the test suite, validates the release JAR, checks Java 21 class version 65, and verifies that API dependencies are not shaded into the plugin. A real Minecraft client/live staging server is not available in CI, so final interaction feel and cross-plugin ordering still require staging E2E testing.

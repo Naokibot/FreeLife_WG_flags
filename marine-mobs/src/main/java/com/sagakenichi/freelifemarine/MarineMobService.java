@@ -25,6 +25,7 @@ import java.util.UUID;
 public final class MarineMobService {
 
     private static final double MAX_HEALTH = 10.0;
+    private static final double DIRECTION_EPSILON = 1.0E-6;
 
     private final JavaPlugin plugin;
     private final Map<UUID, MarineMob> byAnchor = new HashMap<>();
@@ -40,8 +41,15 @@ public final class MarineMobService {
     }
 
     public MarineMob spawn(Player owner, MarineMobType type) {
-        Location spawn = owner.getLocation().clone().add(owner.getLocation().getDirection().setY(0).normalize().multiply(3.0));
-        spawn.add(0.0, 0.4, 0.0);
+        Location origin = owner.getLocation();
+        Vector horizontal = origin.getDirection().setY(0.0);
+        if (horizontal.lengthSquared() < DIRECTION_EPSILON) {
+            double yaw = Math.toRadians(origin.getYaw());
+            horizontal = new Vector(-Math.sin(yaw), 0.0, Math.cos(yaw));
+        }
+        horizontal.normalize().multiply(3.0);
+
+        Location spawn = origin.clone().add(horizontal).add(0.0, 0.4, 0.0);
         World world = spawn.getWorld();
         if (world == null) {
             throw new IllegalStateException("Player world is unavailable");
@@ -146,7 +154,7 @@ public final class MarineMobService {
             Player rider = firstPlayerPassenger(mob.anchor);
             if (rider != null) {
                 Vector direction = rider.getLocation().getDirection();
-                if (direction.lengthSquared() > 0.0001) {
+                if (direction.lengthSquared() > DIRECTION_EPSILON) {
                     direction.normalize().multiply(mob.type.rideSpeed());
                     mob.anchor.setVelocity(direction);
                     mob.anchor.setRotation(rider.getLocation().getYaw(), rider.getLocation().getPitch() * 0.25F);

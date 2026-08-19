@@ -39,6 +39,10 @@ Target: Spigot 1.21.1 / Java 21
    - No downloaded model bytes or textures are included.
    - The README records the visual reference pages and their published licenses.
 
+8. **Looking exactly up/down can produce a zero horizontal vector when choosing a spawn point.**
+   - The spawn calculation now falls back to the player's yaw when the flattened look vector is near zero.
+   - This prevents normalization of a zero vector and invalid spawn coordinates.
+
 ## Verification boundary
 
-CI compiles and tests against the real Spigot 1.21.1 API and validates the JAR. A real Minecraft client is not available in CI, so appearance, right-click hitbox feel, rider seat position, and in-water motion still require staging-server E2E testing before production use.
+CI compiles and tests against the real Spigot 1.21.1 API and validates the JAR. A real Minecraft client is not available in CI, so appearance, right-click hitbox feel, rider seat position, damage hit behavior, and in-water motion still require staging-server E2E testing before production use.
