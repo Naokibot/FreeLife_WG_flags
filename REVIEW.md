@@ -1,76 +1,86 @@
-# FreeLifeWGFlags 1.1.0 review
+# FreeLifeWGFlags 1.2.0 review
 
 Target: Spigot 1.21.1 / Java 21 / WorldGuard 7.0.12 / WorldEdit 7.3.8
 
 ## Scope
 
-Version 1.1.0 keeps the existing 24 flags and their behavior, adds `fl-real-time-switch`, and rewrites README.md in English. The new real-time scheduler is limited to FreeLife State flags, matching the semantics of the existing Minecraft-time switch.
+Version 1.2.0 keeps the existing 25 flags and their behavior and adds one String flag: `fl-water-effects`.
 
-## Real-time scheduler review
+The new flag applies configurable potion effects when a player touches water or remains swimming in water inside a configured WorldGuard region.
 
-1. **`HH:mm` contains the same colon character used before the assignment list.**
-   - A naive `split(":")` parser would break `09:30-17:45:flag=allow`.
-   - The implementation uses an anchored regular expression that parses both time endpoints before the assignment section.
+## Water-effect review
 
-2. **Boundary semantics were ambiguous.**
-   - Windows are start-inclusive and end-exclusive.
-   - `09:00-17:00` is active from 09:00 through 16:59 and stops exactly at 17:00.
+1. **A movement-only trigger would miss players who remain swimming without changing blocks.**
+   - Water contact is checked on a repeating main-thread task every 5 ticks.
+   - Effects are therefore refreshed during continuous swimming rather than only on the first movement event.
 
-3. **Overnight schedules need different range logic.**
-   - `22:00-06:00` matches both late evening and early morning.
-   - Unit tests cover both sides of midnight and the exact end boundary.
+2. **A one-second polling interval can let a one-second effect expire between refreshes.**
+   - The water task runs every 5 ticks instead of sharing the existing one-second player-state task.
+   - This also makes first contact respond within roughly a quarter second rather than up to one second later.
 
-4. **Administrators commonly write whole-hour schedules.**
-   - Both `9-17` and `09:00-17:00` are accepted.
-   - `24`/`24:00` is accepted only as the end of a window, allowing `17-24` without introducing an invalid `LocalTime` value.
+3. **Water contact is broader than a literal `WATER` block at the player's feet.**
+   - The implementation first uses Bukkit's entity `isInWater()` state.
+   - It also checks the blocks at the player's feet and eyes.
+   - `WATER`, `BUBBLE_COLUMN`, and waterlogged block data are treated as water contact.
 
-5. **Zero-length and malformed windows could accidentally become always-on.**
-   - Equal start/end ranges, invalid hours/minutes, malformed assignments, and malformed windows are ignored rather than treated as full-day rules.
+4. **Continuous refresh and configured duration need explicit semantics.**
+   - Each specification uses `effect:level:seconds`.
+   - While water contact continues, the same configured duration is refreshed every 5 ticks.
+   - After leaving water, the effect naturally expires after the configured duration counted from the final refresh.
 
-6. **Time zone handling must not depend on the host machine's local zone.**
-   - `schedule.real-time-zone` defaults to `Asia/Tokyo`.
-   - An invalid configured ZoneId logs a warning and falls back to `Asia/Tokyo` instead of disabling the plugin.
-   - Existing installations that do not yet have the new config key still use the default value.
+5. **Water effects must not conflict with region-wide effect cleanup.**
+   - `fl-water-effects` is independent of `fl-effects` and `fl-remove-effects-on-exit`.
+   - The water effect is not forcibly removed when the player leaves the region or water; its configured duration controls expiry.
 
-7. **Minecraft-time and real-time rules need deterministic precedence.**
-   - Resolution order is base State flag, then `fl-time-switch`, then `fl-real-time-switch`.
-   - A real-time rule only overrides while a matching window exists; otherwise the previous resolved value is retained.
+6. **Unbounded values could create invalid or impractical potion effects.**
+   - Levels are limited to 1 through 256.
+   - Durations are limited to 1 through 86400 seconds.
+   - Values are converted to ticks only after validation.
 
-8. **A clock-minute change during one region query could produce inconsistent same-priority results.**
-   - Each state resolution captures one `LocalTime` snapshot and uses it for all applicable regions in that resolution.
+7. **Malformed effect entries must not disable the plugin.**
+   - Invalid effect names, levels, durations, and malformed entries are ignored individually.
+   - Valid entries in the same flag value continue to work.
 
-9. **Flag registration conflicts must still fail safely.**
-   - `fl-real-time-switch` is included in the existing preflight type check before any flag registration proceeds.
+8. **Repeated parsing every 5 ticks is unnecessary.**
+   - Parsed specifications are cached by their raw WorldGuard flag value.
+   - Editing the flag to a new value naturally creates a new parsed entry without requiring a restart.
+
+9. **Water checks should not query WorldGuard for every dry player.**
+   - Water contact is checked before querying the region flag.
+   - Dry players therefore skip the WorldGuard lookup in the high-frequency task.
+
+10. **Existing effects should not be forcibly stripped just to apply a water effect.**
+    - The implementation uses Bukkit's normal `addPotionEffect(PotionEffect)` method rather than the deprecated force overload.
 
 ## Existing hardening retained
 
-- Effect exit cleanup preserves pre-existing effects when safe.
+- Real-clock schedules use deterministic time-zone and boundary handling.
+- Minecraft-time and real-time State overrides retain their existing precedence.
+- Effect exit cleanup preserves pre-existing region effects when safe.
 - Rollback checks the expected post-operation state before restoring a block.
-- Multi-block placement records each replaced block state.
 - Rollback-enabled block breaking suppresses drops and block XP to prevent duplication.
 - Stay/AFK teleports honor item entry and exit restrictions.
-- Direct movement between restricted regions compares effective region keys.
 - Async chat never queries WorldGuard from the async event thread.
-- Chat policy is refreshed immediately after successful region crossing and periodically as a fallback.
 - AFK activity includes inventory interaction, held-slot changes, drops, and hand swaps.
-- Item restrictions do not use escrow storage.
 - `keepInventory` cannot be used to carry items out of an effective item-exit restriction through death.
 - Storage protection is checked at both interaction and inventory-open layers.
 - Custom flag names/types are preflighted before registration.
 
-## Test coverage
+## Tests
 
-Existing parser tests remain in place. Version 1.1.0 adds real-time rule tests for:
+Version 1.2.0 adds parser regression tests covering:
 
-- exact start and end boundaries
-- minute-precision schedules
-- overnight schedules
-- whole-hour shorthand
-- `24:00` end-of-day handling
-- malformed and zero-length windows
+- multiple effects in one flag
+- one-based levels converted to potion amplifiers
+- seconds converted to ticks
+- zero values
+- levels above the configured maximum
+- durations above the configured maximum
+- unknown effect names
+- preservation of valid entries when invalid entries are present
 
 ## Verification boundary
 
-GitHub Actions builds the final source against the real Spigot/WorldGuard/WorldEdit dependencies, runs the JUnit suite, verifies the release JAR and Java class version, and checks that dependency classes are not shaded into the plugin.
+GitHub Actions builds against the real Spigot 1.21.1, WorldGuard 7.0.12, and WorldEdit 7.3.8 dependencies, runs the JUnit suite, verifies the release JAR and Java class version, and checks that dependency classes are not shaded into the plugin.
 
-A real Minecraft client connected to the user's live server is not available in CI, so live player-driven end-to-end testing is not claimed.
+A real Minecraft client connected to the user's live server is not available in CI, so live player-driven water-contact and swimming E2E testing is not claimed.
