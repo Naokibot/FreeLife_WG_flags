@@ -23,6 +23,7 @@ public final class FreeLifeFlags {
     public StateFlag namedAnimalDamage;
     public StateFlag removeEffectsOnExit;
     public StringFlag effects;
+    public StringFlag waterEffects;
     public StringFlag timeSwitch;
     public StringFlag realTimeSwitch;
     public IntegerFlag staySeconds;
@@ -53,6 +54,7 @@ public final class FreeLifeFlags {
         namedAnimalDamage = register(registry, new StateFlag("fl-named-animal-damage", false), StateFlag.class);
         removeEffectsOnExit = register(registry, new StateFlag("fl-remove-effects-on-exit", false), StateFlag.class);
         effects = register(registry, new StringFlag("fl-effects"), StringFlag.class);
+        waterEffects = register(registry, new StringFlag("fl-water-effects"), StringFlag.class);
         timeSwitch = register(registry, new StringFlag("fl-time-switch"), StringFlag.class);
         realTimeSwitch = register(registry, new StringFlag("fl-real-time-switch"), StringFlag.class);
         staySeconds = register(registry, new IntegerFlag("fl-stay-seconds"), IntegerFlag.class);
@@ -81,6 +83,7 @@ public final class FreeLifeFlags {
         requireCompatible(registry, "fl-named-animal-damage", StateFlag.class);
         requireCompatible(registry, "fl-remove-effects-on-exit", StateFlag.class);
         requireCompatible(registry, "fl-effects", StringFlag.class);
+        requireCompatible(registry, "fl-water-effects", StringFlag.class);
         requireCompatible(registry, "fl-time-switch", StringFlag.class);
         requireCompatible(registry, "fl-real-time-switch", StringFlag.class);
         requireCompatible(registry, "fl-stay-seconds", IntegerFlag.class);
