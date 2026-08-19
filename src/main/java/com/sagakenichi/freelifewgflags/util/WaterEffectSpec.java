@@ -1,7 +1,5 @@
 package com.sagakenichi.freelifewgflags.util;
 
-import org.bukkit.potion.PotionEffectType;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -17,7 +15,6 @@ public final class WaterEffectSpec {
         this.entries = List.copyOf(entries);
     }
 
-    @SuppressWarnings("deprecation")
     public static WaterEffectSpec parse(String input) {
         if (input == null || input.isBlank()) {
             return new WaterEffectSpec(List.of());
@@ -30,18 +27,14 @@ public final class WaterEffectSpec {
                 continue;
             }
 
-            PotionEffectType type = PotionEffectType.getByName(parts[0].trim().toUpperCase(Locale.ROOT));
-            if (type == null) {
-                continue;
-            }
-
             Integer level = parsePositive(parts[1], MAX_LEVEL);
             Integer seconds = parsePositive(parts[2], MAX_DURATION_SECONDS);
             if (level == null || seconds == null) {
                 continue;
             }
 
-            entries.add(new Entry(type, level - 1, seconds * 20));
+            String effectName = parts[0].trim().toUpperCase(Locale.ROOT);
+            entries.add(new Entry(effectName, level - 1, seconds * 20));
         }
         return new WaterEffectSpec(entries);
     }
@@ -59,6 +52,6 @@ public final class WaterEffectSpec {
         }
     }
 
-    public record Entry(PotionEffectType type, int amplifier, int durationTicks) {
+    public record Entry(String effectName, int amplifier, int durationTicks) {
     }
 }
