@@ -2,6 +2,7 @@ package com.sagakenichi.freelifewgflags;
 
 import com.sagakenichi.freelifewgflags.listener.ActivityListener;
 import com.sagakenichi.freelifewgflags.listener.BlockListener;
+import com.sagakenichi.freelifewgflags.listener.BuildOverrideListener;
 import com.sagakenichi.freelifewgflags.listener.ChatCommandListener;
 import com.sagakenichi.freelifewgflags.listener.DamageListener;
 import com.sagakenichi.freelifewgflags.listener.InteractionListener;
@@ -57,6 +58,7 @@ public final class FreeLifeWGFlagsPlugin extends JavaPlugin {
         );
 
         PluginManager pluginManager = getServer().getPluginManager();
+        pluginManager.registerEvents(new BuildOverrideListener(flags, regions), this);
         pluginManager.registerEvents(
                 new RegionMovementListener(regions, itemBoundary, activity, stateService, chatPolicies),
                 this
@@ -76,7 +78,7 @@ public final class FreeLifeWGFlagsPlugin extends JavaPlugin {
         }
         getServer().getScheduler().runTaskTimer(this, stateService::tick, 20L, 20L);
         getServer().getScheduler().runTaskTimer(this, waterEffects::tick, 1L, 5L);
-        getLogger().info("FreeLifeWGFlags 1.2.0 enabled with 26 custom WorldGuard flags.");
+        getLogger().info("FreeLifeWGFlags 1.3.0 enabled with 26 custom WorldGuard flags.");
     }
 
     @Override
