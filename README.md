@@ -25,7 +25,8 @@ Custom flags are registered during `onLoad()`. After replacing the JAR, fully st
 | `fl-animal-damage` | State | `deny` | Cancels damage to animals |
 | `fl-named-animal-damage` | State | `deny` | Cancels damage to named animals |
 | `fl-effects` | String | `speed:2,night_vision:1` | Applies potion effects to players in the region |
-| `fl-remove-effects-on-exit` | State | `allow` | Removes effects applied by this plugin when leaving |
+| `fl-water-effects` | String | `speed:2:10,water_breathing:1:30` | Applies timed effects while touching or swimming in water |
+| `fl-remove-effects-on-exit` | State | `allow` | Removes effects applied by `fl-effects` when leaving |
 | `fl-time-switch` | String | see below | Switches FreeLife State flags using Minecraft world time |
 | `fl-real-time-switch` | String | see below | Switches FreeLife State flags using real clock time |
 | `fl-stay-seconds` | Integer | `300` | Seconds before the stay-time teleport triggers |
@@ -66,7 +67,36 @@ Unless noted otherwise, a State flag uses `deny` to block and `allow` to permit.
 /rg flag arena fl-remove-effects-on-exit allow
 ```
 
-When exit cleanup is enabled, the plugin removes only effects that it applied. If the player had an effect of the same type before entering, the previous effect is recorded and restored when it is safe to do so.
+When exit cleanup is enabled, the plugin removes only effects that it applied through `fl-effects`. If the player had an effect of the same type before entering, the previous effect is recorded and restored when it is safe to do so.
+
+## Water-triggered effects
+
+`fl-water-effects` applies potion effects while a player is touching water or swimming in water inside the region.
+
+Format:
+
+```text
+effect:level:seconds,effect:level:seconds
+```
+
+Example:
+
+```text
+/rg flag pool fl-water-effects speed:2:10,water_breathing:1:30
+```
+
+This applies:
+
+- Speed II for 10 seconds
+- Water Breathing I for 30 seconds
+
+The water check runs every 5 ticks. While the player stays in water, the configured effects are refreshed, so they do not expire during continuous swimming. After leaving the water, each effect remains for the configured duration counted from the last refresh.
+
+Water detection includes the server's in-water state, water at the player's feet or eyes, bubble columns, and waterlogged blocks at those positions.
+
+Levels are one-based and may be from 1 to 256. Durations are in seconds and may be from 1 to 86400. Invalid entries are ignored without disabling the plugin.
+
+`fl-water-effects` does not use `fl-remove-effects-on-exit`; its duration is intentionally controlled by the seconds written in the water-effect specification.
 
 ## Minecraft-time switching
 
@@ -225,7 +255,7 @@ mvn -B verify
 Output:
 
 ```text
-target/FreeLifeWGFlags-1.1.0-Spigot-1.21.1.jar
+target/FreeLifeWGFlags-1.2.0-Spigot-1.21.1.jar
 ```
 
 ## Verification scope
